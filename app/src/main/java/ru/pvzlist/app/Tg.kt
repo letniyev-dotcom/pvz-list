@@ -20,7 +20,7 @@ enum class Stage { Starting, Phone, Code, Password, Unsupported, Ready }
  */
 object Tg {
     private const val API_ID = 39658289
-    private const val API_HASH = "q_f0vQwdkBQ"
+    private const val API_HASH = "44174916ecfe21cdbfdd1d36df98edb5"
 
     var stage by mutableStateOf(Stage.Starting)
         private set
