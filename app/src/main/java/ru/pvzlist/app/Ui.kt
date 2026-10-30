@@ -49,8 +49,8 @@ fun loadOnest(context: Context): FontFamily {
         FontFamily(
             listOf(400, 500, 600).map { w ->
                 Font(
-                    am,
                     "fonts/onest.ttf",
+                    am,
                     FontWeight(w),
                     FontStyle.Normal,
                     FontVariation.Settings(FontVariation.weight(w))
