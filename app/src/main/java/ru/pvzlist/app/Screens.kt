@@ -35,6 +35,9 @@ import androidx.compose.ui.unit.dp
 
 /* ===================== Шапка ===================== */
 
+/** Высота шапки = base + 64dp на ВСЕХ экранах (заголовок 24 + подзаголовок 20 + отступы 4/16) */
+val HEAD_EXTRA = 64.dp
+
 @Composable
 fun Head(
     base: Dp,
@@ -45,6 +48,7 @@ fun Head(
     Box(
         Modifier
             .fillMaxWidth()
+            .height(base + HEAD_EXTRA)
             .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
             .background(C.Card)
     ) {
@@ -137,7 +141,7 @@ fun CardBox(content: @Composable () -> Unit) {
         Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(C.Card)
     ) { content() }
 }
@@ -202,7 +206,7 @@ fun StartContent(st: AppState, ended: Boolean, viewH: Dp) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(24.dp))
                     .background(C.Card)
                     .tap { st.night = !st.night }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -264,7 +268,7 @@ fun TaskRow(t: Task, done: Boolean, next: Boolean, late: Boolean, now: Int, onCl
         Modifier
             .fillMaxWidth()
             .height(64.dp)
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(if (next) C.AccentSoft else C.Card)
             .tap(onClick)
             .padding(start = 12.dp, end = 16.dp),
@@ -614,9 +618,15 @@ fun RowScope.NavItem(
 }
 
 @Composable
-fun BottomBar(st: AppState, ended: Boolean, navInset: Dp, onOpen: () -> Unit) {
+fun BottomBar(
+    st: AppState,
+    ended: Boolean,
+    navInset: Dp,
+    modifier: Modifier = Modifier,
+    onOpen: () -> Unit
+) {
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
             .background(C.Card)
