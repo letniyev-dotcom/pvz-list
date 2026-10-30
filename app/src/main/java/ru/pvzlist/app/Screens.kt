@@ -623,7 +623,6 @@ fun BottomBar(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
             .background(C.Card)
     ) {
         if (st.tab == Tab.List && !st.balance && !ended && !st.open) {
