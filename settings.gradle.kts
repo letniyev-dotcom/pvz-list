@@ -10,6 +10,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // TDLib (Telegram) — готовая сборка для Android
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeGroup("com.github.tdlibx") }
+        }
     }
 }
 rootProject.name = "PvzList"

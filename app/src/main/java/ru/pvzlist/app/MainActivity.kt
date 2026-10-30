@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
             )
         )
         super.onCreate(savedInstanceState)
+        Tg.start(applicationContext)
         setContent {
             val ctx = LocalContext.current
             val density = LocalDensity.current
@@ -62,7 +63,7 @@ class MainActivity : ComponentActivity() {
                 LocalDensity provides Density(density.density, 1f),
                 LocalOnest provides onest
             ) {
-                App()
+                Root()
             }
         }
     }

@@ -14,6 +14,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        // TDLib тянет нативные библиотеки: оставляем только реальные ABI телефонов
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // Релизный ключ лежит в app/release.jks
@@ -72,4 +74,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation-core")
+    // Настоящий вход и отправка через Telegram (TDLib)
+    implementation("com.github.tdlibx:td:1.8.56")
 }

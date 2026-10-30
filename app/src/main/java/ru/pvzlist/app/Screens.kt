@@ -19,6 +19,10 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -558,6 +562,10 @@ fun BalanceContent() {
 
 @Composable
 fun ProfileContent() {
+    val name = Tg.userName.ifBlank { "Сотрудник ПВЗ" }
+    val ini = name.split(" ").filter { it.isNotBlank() }.take(2)
+        .joinToString("") { it.first().uppercase() }.ifBlank { "ПВ" }
+    var sure by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -569,9 +577,9 @@ fun ProfileContent() {
             Modifier.size(56.dp).background(C.AccentSoft, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Txt("АК", 18, 22, 600, C.Accent)
+            Txt(ini, 18, 22, 600, C.Accent)
         }
-        Txt("Сотрудник ПВЗ", 16, 20, 600)
+        Txt(name, 16, 20, 600, maxLines = 1, ellipsis = true)
     }
     CardBox {
         RowItem {
@@ -587,6 +595,31 @@ fun ProfileContent() {
             Txt("09:00–21:00", 16, 20, 600)
         }
     }
+    Lbl("Telegram")
+    CardBox {
+        RowItem {
+            Txt("Аккаунт", 15, 22, 500, modifier = Modifier.weight(1f))
+            val d = Tg.userPhone.removePrefix("7")
+            Txt(
+                if (Tg.userPhone.isBlank()) "—" else "+7 " + fmtPhoneDigits(d),
+                14, 20, 500, C.Mute
+            )
+        }
+        RowItem(Modifier.tap { if (sure) Tg.logout() else sure = true }) {
+            Txt(
+                when {
+                    Tg.leaving -> "Выходим…"
+                    sure -> "Нажмите ещё раз, чтобы выйти"
+                    else -> "Выйти из аккаунта"
+                },
+                15, 22, 500, C.Warn, Modifier.weight(1f)
+            )
+        }
+    }
+    if (Tg.error.isNotEmpty()) {
+        Txt(Tg.error, 13, 18, 400, C.Warn, Modifier.padding(horizontal = 32.dp, vertical = 10.dp))
+    }
+    Spacer(Modifier.height(16.dp))
 }
 
 /* ===================== Нижняя панель ===================== */

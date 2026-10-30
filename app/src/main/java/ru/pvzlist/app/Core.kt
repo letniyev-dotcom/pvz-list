@@ -127,6 +127,10 @@ private val ICONS: Map<String, List<Sh>> = mapOf(
         Sh.P("M4 7.5l8 4.5 8-4.5M12 12v9")
     ),
     "swap" to listOf(Sh.P("M4 8h14l-3.5-3.5M20 16H6l3.5 3.5")),
+    "send" to listOf(
+        Sh.P("M21 3L10.5 13.5"),
+        Sh.P("M21 3l-6.5 18-4-7.5L3 9.5z")
+    ),
     "check" to listOf(Sh.P("M5 12.5l4.5 4.5L19 7.5")),
     "wallet" to listOf(
         Sh.P("M17 8V6.5A1.5 1.5 0 0 0 15.5 5H6a2 2 0 0 0-2 2"),
