@@ -106,9 +106,9 @@ fun App() {
     }
 
     val density = LocalDensity.current
-    val base = maxOf(WindowInsets.statusBars.asPaddingValues().calculateTopPadding(), 50.dp)
+    val base = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val headH = base + HEAD_EXTRA
+    val headH = base + HEAD_H
 
     var bottomPx by remember { mutableStateOf(0) }
     val bottomH = with(density) { bottomPx.toDp() }

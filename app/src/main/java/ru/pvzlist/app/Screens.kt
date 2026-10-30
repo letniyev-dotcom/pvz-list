@@ -35,8 +35,8 @@ import androidx.compose.ui.unit.dp
 
 /* ===================== Шапка ===================== */
 
-/** Высота шапки = base + 64dp на ВСЕХ экранах (заголовок 24 + подзаголовок 20 + отступы 4/16) */
-val HEAD_EXTRA = 64.dp
+/** Высота шапки = отступ статус-бара + 56dp на ВСЕХ экранах */
+val HEAD_H = 56.dp
 
 @Composable
 fun Head(
@@ -48,22 +48,17 @@ fun Head(
     Box(
         Modifier
             .fillMaxWidth()
-            .height(base + HEAD_EXTRA)
-            .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
+            .height(base + HEAD_H)
             .background(C.Card)
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = base + 4.dp, bottom = 16.dp)
+                .padding(start = 56.dp, end = 56.dp, top = base + 14.dp)
         ) {
-            Txt(title, 17, 24, 600, C.Ink, Modifier.fillMaxWidth(), align = TextAlign.Center)
+            Txt(title, 17, 20, 600, C.Ink, Modifier.fillMaxWidth(), align = TextAlign.Center, maxLines = 1)
             if (sub != null) {
-                Txt(
-                    sub, 13, 18, 400, C.Mute,
-                    Modifier.fillMaxWidth().padding(top = 2.dp),
-                    align = TextAlign.Center
-                )
+                Txt(sub, 13, 16, 400, C.Mute, Modifier.fillMaxWidth(), align = TextAlign.Center, maxLines = 1)
             }
         }
         overlay()
@@ -75,7 +70,7 @@ fun BoxScope.BalancePill(base: Dp, onClick: () -> Unit) {
     Row(
         Modifier
             .align(Alignment.TopEnd)
-            .padding(end = 16.dp, top = base + 1.dp)
+            .padding(end = 16.dp, top = base + 7.dp)
             .height(34.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(C.Bg)
@@ -94,7 +89,7 @@ fun BoxScope.BackButton(base: Dp, onClick: () -> Unit) {
     Box(
         Modifier
             .align(Alignment.TopStart)
-            .padding(start = 12.dp, top = base - 2.dp)
+            .padding(start = 12.dp, top = base + 4.dp)
             .size(40.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(C.Bg)
