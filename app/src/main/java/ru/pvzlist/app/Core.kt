@@ -26,6 +26,10 @@ object C {
     val Warn = Color(0xFFB45F06)
     val WarnSoft = Color(0xFFFAEBD9)
     val NavIdle = Color(0xFFA3A1B8)
+    val Ozon = Color(0xFF1F6BFF)
+    val Wb = Color(0xFFC42DB4)
+    /** цвета аватарок групп, как COLORS в html */
+    val Gav = listOf(Color(0xFFA238FF), Color(0xFF1F6BFF), Color(0xFFC42DB4), Color(0xFF1A8F4D), Color(0xFFB45F06))
 }
 
 const val RATE = 2800
@@ -53,46 +57,6 @@ fun pl(n: Int, a: String, b: String, c: String): String {
     return if (m == 1 && h != 11) a else if (m in 2..4 && (h < 10 || h >= 20)) b else c
 }
 
-class Task(
-    val id: Int,
-    val title: String,
-    val sub: String,
-    val warn: Boolean = false,
-    val timer: Boolean = false
-)
-
-class Group(val name: String, val chip: String, val tasks: List<Task>)
-
-val GROUPS = listOf(
-    Group("Подготовка", "с 08:40", listOf(
-        Task(1, "Включить свет и технику", "08:40"),
-        Task(2, "Проверить зону выдачи", "08:50")
-    )),
-    Group("Открытие", "в 09:00", listOf(
-        Task(3, "Открыть ПВЗ", "09:00"),
-        Task(4, "Разложить по ячейкам", "до 11:00", warn = true)
-    )),
-    Group("Днём", "", listOf(
-        Task(5, "Проверить сроки хранения", "14:00"),
-        Task(6, "Возвраты курьеру", "16:00")
-    )),
-    Group("Закрытие", "", listOf(
-        Task(7, "Сверить остатки", "20:30"),
-        Task(8, "Выключить и закрыть ПВЗ", "21:00")
-    ))
-)
-
-val NIGHT_TASK = Task(9, "Ночная приёмка", "до 10:00", warn = false, timer = true)
-
-val TASK_ICON = mapOf(
-    1 to "bulb", 2 to "eye", 3 to "door", 4 to "grid", 5 to "hour",
-    6 to "undo", 7 to "clip", 8 to "power", 9 to "moon"
-)
-
-fun groupsNow(night: Boolean): List<Group> = GROUPS.map { g ->
-    if (g.name == "Открытие" && night) Group(g.name, g.chip, listOf(NIGHT_TASK) + g.tasks) else g
-}
-
 class Month(val name: String, val days: Int, val off: Int, val start: Int)
 
 val MONTHS = listOf(
@@ -107,10 +71,30 @@ class AppState {
     var tab by mutableStateOf(Tab.List)
     var balance by mutableStateOf(false)
     var month by mutableStateOf(0)
-    val done = mutableStateMapOf<Int, Boolean>()
     var night by mutableStateOf(true)
     var open by mutableStateOf(false)
     var at by mutableStateOf("")
+
+    /** открытый отчёт (id типа) */
+    var repId by mutableStateOf<String?>(null)
+    val form = RepForm()
+    var sending by mutableStateOf(false)
+
+    /** настройка групп и тем */
+    var setupOpen by mutableStateOf(false)
+    var setupFirst by mutableStateOf(false)
+    var pick by mutableStateOf<Pick?>(null)
+    var pickBusy by mutableStateOf(false)
+
+    var toastText by mutableStateOf("")
+    var toastBad by mutableStateOf(false)
+    var toastKey by mutableStateOf(0)
+
+    fun toast(t: String, bad: Boolean = false) {
+        toastText = t
+        toastBad = bad
+        toastKey++
+    }
 }
 
 /* ---------- SVG-иконки из HTML (viewBox 24x24, stroke) ---------- */
@@ -177,6 +161,28 @@ private val ICONS: Map<String, List<Sh>> = mapOf(
         Sh.P("M6.8 6.8a8 8 0 1 0 10.4 0")
     ),
     "moon" to listOf(Sh.P("M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z")),
+    "truck" to listOf(
+        Sh.P("M3 6.5h11V16H3z"),
+        Sh.P("M14 9.5h4l3 3.2V16h-7"),
+        Sh.Ci(7f, 17.5f, 1.8f),
+        Sh.Ci(17f, 17.5f, 1.8f)
+    ),
+    "clock" to listOf(
+        Sh.Ci(12f, 12f, 9f),
+        Sh.P("M12 7v5l3 2")
+    ),
+    "cam" to listOf(
+        Sh.P("M4 8.5h3L8.5 6h7L17 8.5h3V19H4z"),
+        Sh.Ci(12f, 13.5f, 3.5f)
+    ),
+    "shot" to listOf(
+        Sh.Re(7f, 3f, 10f, 18f, 2.5f),
+        Sh.P("M10.5 18h3")
+    ),
+    "warn" to listOf(
+        Sh.P("M12 4l9 16H3z"),
+        Sh.P("M12 10v4.5M12 17.6v.1")
+    ),
     "door" to listOf(
         Sh.P("M6 21V4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21M4 21h16"),
         Sh.Ci(14.5f, 12.5f, 0.9f)

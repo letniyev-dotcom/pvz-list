@@ -12,8 +12,8 @@ android {
         applicationId = "ru.pvzlist.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
         // TDLib тянет нативные библиотеки: оставляем только реальные ABI телефонов
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
@@ -74,6 +74,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation-core")
+    implementation("androidx.compose.animation:animation")
+    implementation("androidx.core:core-ktx:1.13.1")
     // Настоящий вход и отправка через Telegram (TDLib)
     implementation("com.github.tdlibx:td:1.8.56")
 }

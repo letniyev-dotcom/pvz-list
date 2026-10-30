@@ -13,6 +13,14 @@ import java.io.File
 
 enum class Stage { Starting, Phone, Code, Password, Unsupported, Ready }
 
+class TgTopic(val id: Long, val name: String)
+
+/** Группа из аккаунта Telegram. Для групп с темами темы подгружаются отдельно */
+class TgGroup(val id: Long, val name: String, val members: Int, val forum: Boolean) {
+    var topics by mutableStateOf<List<TgTopic>?>(null)
+    val colorIdx: Int get() = (id.hashCode() and 0x7fffffff) % 5
+}
+
 /**
  * Настоящий вход в Telegram через TDLib (на ваших api_id / api_hash).
  * Сессия хранится в приватной папке приложения и переживает перезапуск.
@@ -50,6 +58,12 @@ object Tg {
         private set
     var leaving by mutableStateOf(false)
         private set
+    /** Группы из аккаунта (только группы, не каналы) */
+    var groups by mutableStateOf<List<TgGroup>>(emptyList())
+        private set
+    /** idle | load | ok | err */
+    var gstate by mutableStateOf("idle")
+        private set
 
     private val main = Handler(Looper.getMainLooper())
     private var ctx: Context? = null
@@ -80,6 +94,15 @@ object Tg {
             is TdApi.UpdateAuthorizationState -> onAuth(o.authorizationState)
             is TdApi.UpdateConnectionState ->
                 ui { online = o.state !is TdApi.ConnectionStateWaitingForNetwork }
+            is TdApi.UpdateMessageSendSucceeded -> {
+                val old = o.oldMessageId
+                ui { finish(old, null) }
+            }
+            is TdApi.UpdateMessageSendFailed -> {
+                val old = o.oldMessageId
+                val text = failText(o)
+                ui { finish(old, text) }
+            }
             else -> {}
         }
     }
@@ -142,7 +165,11 @@ object Tg {
             is TdApi.AuthorizationStateClosed -> {
                 // после выхода TDLib закрывается — поднимаем новый клиент для нового входа
                 client = null
-                ui { stage = Stage.Starting; userName = ""; userPhone = ""; leaving = false }
+                ui {
+                    stage = Stage.Starting; userName = ""; userPhone = ""; leaving = false
+                    groups = emptyList(); gstate = "idle"
+                    Cfg.clearDest()
+                }
                 create()
             }
             else -> ui { busy = false; stage = Stage.Unsupported }
@@ -187,15 +214,259 @@ object Tg {
         send(TdApi.LogOut())
     }
 
-    private fun msg(e: TdApi.Error): String {
-        val m = e.message ?: ""
+    /* ---------- группы и темы ---------- */
+
+    fun groupById(id: Long): TgGroup? = if (id == 0L) null else groups.firstOrNull { it.id == id }
+
+    /** Грузим список чатов (основной и архив) и оставляем только группы — с темами и без */
+    fun loadGroups() {
+        if (gstate == "load") return
+        val cl = client ?: return
+        gstate = "load"
+        loadList(cl, { TdApi.ChatListMain() }, 0) { mainIds ->
+            if (mainIds == null) {
+                ui { gstate = "err" }
+            } else {
+                loadList(cl, { TdApi.ChatListArchive() }, 0) { arch ->
+                    val all = (mainIds.toList() + (arch?.toList() ?: emptyList())).distinct().take(600)
+                    resolveAll(cl, all.toLongArray())
+                }
+            }
+        }
+    }
+
+    /** Подгружаем чаты списка до конца (404 — всё загружено) и забираем их id; null — ошибка */
+    private fun loadList(cl: Client, mk: () -> TdApi.ChatList, n: Int, done: (LongArray?) -> Unit) {
+        val f = TdApi.LoadChats()
+        f.chatList = mk()
+        f.limit = 100
+        cl.send(f, Client.ResultHandler { r ->
+            if (r is TdApi.Ok && n < 9) {
+                loadList(cl, mk, n + 1, done)
+            } else {
+                val g = TdApi.GetChats()
+                g.chatList = mk()
+                g.limit = 500
+                cl.send(g, Client.ResultHandler { c ->
+                    done(if (c is TdApi.Chats) c.chatIds else null)
+                })
+            }
+        })
+    }
+
+    private fun resolveAll(cl: Client, ids: LongArray) {
+        if (ids.isEmpty()) {
+            ui { groups = emptyList(); gstate = "ok" }
+            return
+        }
+        val out = arrayOfNulls<TgGroup>(ids.size)
+        val left = java.util.concurrent.atomic.AtomicInteger(ids.size)
+        for (i in ids.indices) {
+            resolveGroup(cl, ids[i]) { g ->
+                out[i] = g
+                if (left.decrementAndGet() == 0) onGroups(out.filterNotNull())
+            }
+        }
+    }
+
+    private fun onGroups(list: List<TgGroup>) {
+        ui {
+            groups = list
+            // для уже выбранных групп с темами сразу подгружаем темы
+            val need = listOf(Cfg.ozon.g, Cfg.wb.g).distinct()
+                .mapNotNull { id -> list.firstOrNull { it.id == id && it.forum } }
+            if (need.isEmpty()) {
+                gstate = "ok"
+            } else {
+                var left = need.size
+                need.forEach { g ->
+                    loadTopics(g) {
+                        left--
+                        if (left == 0) gstate = "ok"
+                    }
+                }
+            }
+        }
+    }
+
+    private fun resolveGroup(cl: Client, chatId: Long, done: (TgGroup?) -> Unit) {
+        cl.send(TdApi.GetChat(chatId), Client.ResultHandler { c ->
+            if (c !is TdApi.Chat) {
+                done(null)
+            } else {
+                val t = c.type
+                val title = c.title ?: ""
+                if (t is TdApi.ChatTypeSupergroup && !t.isChannel) {
+                    cl.send(TdApi.GetSupergroup(t.supergroupId), Client.ResultHandler { s ->
+                        if (s is TdApi.Supergroup) done(TgGroup(chatId, title, s.memberCount, s.isForum)) else done(null)
+                    })
+                } else if (t is TdApi.ChatTypeBasicGroup) {
+                    cl.send(TdApi.GetBasicGroup(t.basicGroupId), Client.ResultHandler { b ->
+                        if (b is TdApi.BasicGroup && b.isActive) done(TgGroup(chatId, title, b.memberCount, false)) else done(null)
+                    })
+                } else {
+                    done(null)
+                }
+            }
+        })
+    }
+
+    /** Темы группы-форума. done вызывается в главном потоке */
+    fun loadTopics(g: TgGroup, done: (Boolean) -> Unit) {
+        val cl = client
+        if (cl == null) {
+            ui { done(false) }
+            return
+        }
+        val f = TdApi.GetForumTopics()
+        f.chatId = g.id
+        f.query = ""
+        f.limit = 100
+        cl.send(f, Client.ResultHandler { r ->
+            if (r is TdApi.ForumTopics) {
+                val list = r.topics.map { TgTopic(topicIdOf(it.info), it.info.name ?: "") }
+                ui { g.topics = list; done(true) }
+            } else {
+                ui { done(false) }
+            }
+        })
+    }
+
+    /** В разных версиях TDLib поле называется по-разному — читаем то, что есть */
+    private fun topicIdOf(info: Any): Long {
+        for (n in arrayOf("forumTopicId", "messageThreadId")) {
+            try {
+                val v = info.javaClass.getField(n).get(info)
+                if (v is Number) return v.toLong()
+            } catch (e: Exception) {
+            }
+        }
+        return 0L
+    }
+
+    /* ---------- отправка отчёта ---------- */
+
+    private val pending = HashMap<Long, (String?) -> Unit>()
+    private val early = HashMap<Long, String?>()
+
+    /**
+     * Отправляем текст или фото с подписью в группу (и в тему, если она есть).
+     * done(null) — доставлено, done("текст") — ошибка. Вызывается в главном потоке.
+     */
+    fun sendReport(chatId: Long, topicId: Long?, text: String, photoPath: String?, done: (String?) -> Unit) {
+        if (photoPath == null) {
+            sendOne(chatId, topicId, textContent(text), done)
+            return
+        }
+        // длинную подпись Telegram не примет — шлём отдельным сообщением
+        val long = text.length > 1000
+        sendOne(chatId, topicId, photoContent(photoPath, if (long) "" else text)) { err ->
+            if (err != null || !long) done(err) else sendOne(chatId, topicId, textContent(text), done)
+        }
+    }
+
+    private fun fmtText(t: String): TdApi.FormattedText = TdApi.FormattedText(t, arrayOf<TdApi.TextEntity>())
+
+    private fun textContent(t: String): TdApi.InputMessageContent {
+        val c = TdApi.InputMessageText()
+        c.text = fmtText(t)
+        return c
+    }
+
+    private fun photoContent(path: String, caption: String): TdApi.InputMessageContent {
+        val c = TdApi.InputMessagePhoto()
+        c.photo = TdApi.InputFileLocal(path)
+        c.caption = fmtText(caption)
+        return c
+    }
+
+    private fun sendOne(chatId: Long, topicId: Long?, content: TdApi.InputMessageContent, done: (String?) -> Unit) {
+        val cl = client
+        if (cl == null) {
+            ui { done("Нет связи с Telegram") }
+            return
+        }
+        val f = TdApi.SendMessage()
+        f.chatId = chatId
+        f.inputMessageContent = content
+        if (topicId != null && topicId > 1L) setTopic(f, topicId)
+        cl.send(f, Client.ResultHandler { r ->
+            if (r is TdApi.Message) {
+                val id = r.id
+                ui { watch(id, done) }
+            } else if (r is TdApi.Error) {
+                val text = msg(r)
+                ui { done(text) }
+            }
+        })
+    }
+
+    private fun setNum(o: Any, name: String, v: Long) {
+        val fld = o.javaClass.getField(name)
+        if (fld.type == java.lang.Integer.TYPE) fld.setInt(o, v.toInt()) else fld.setLong(o, v)
+    }
+
+    /** Тема: в новых версиях topicId (MessageTopicForum), в старых messageThreadId */
+    private fun setTopic(f: TdApi.SendMessage, id: Long) {
+        try {
+            val fld = f.javaClass.getField("topicId")
+            val cls = Class.forName("org.drinkless.tdlib.TdApi\$MessageTopicForum")
+            val o = cls.getConstructor().newInstance()
+            setNum(o, "forumTopicId", id)
+            fld.set(f, o)
+            return
+        } catch (e: Exception) {
+        }
+        try {
+            setNum(f, "messageThreadId", id)
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun watch(id: Long, cb: (String?) -> Unit) {
+        if (early.containsKey(id)) {
+            cb(early.remove(id))
+            return
+        }
+        pending[id] = cb
+        main.postDelayed({
+            val c = pending.remove(id)
+            if (c != null) c("Нет связи с Telegram")
+        }, 60000L)
+    }
+
+    private fun finish(id: Long, err: String?) {
+        val cb = pending.remove(id)
+        if (cb != null) cb(err) else early[id] = err
+    }
+
+    private fun failText(o: TdApi.UpdateMessageSendFailed): String {
+        try {
+            val e = o.javaClass.getField("error").get(o)
+            if (e is TdApi.Error) return msg(e)
+        } catch (ex: Exception) {
+        }
+        try {
+            val m = o.javaClass.getField("errorMessage").get(o)
+            if (m is String) return friendly(m, 0)
+        } catch (ex: Exception) {
+        }
+        return "Не получилось отправить"
+    }
+
+    private fun msg(e: TdApi.Error): String = friendly(e.message ?: "", e.code)
+
+    private fun friendly(m: String, code: Int): String {
         return when {
             "PHONE_NUMBER_INVALID" in m -> "Неверный номер телефона"
             "PHONE_NUMBER_BANNED" in m -> "Этот номер заблокирован в Telegram"
             "PHONE_CODE_INVALID" in m -> "Неверный код"
             "PHONE_CODE_EXPIRED" in m -> "Код устарел — запросите новый"
             "PASSWORD_HASH_INVALID" in m -> "Неверный пароль"
-            e.code == 429 || "FLOOD" in m -> {
+            "WRITE_FORBIDDEN" in m || "USER_BANNED_IN_CHANNEL" in m ||
+                "rights to send" in m || "write access" in m -> "В эту группу нельзя писать"
+            "TOPIC_CLOSED" in m || "opic closed" in m -> "Тема закрыта"
+            code == 429 || "FLOOD" in m -> {
                 val n = Regex("(\\d+)").find(m)?.value
                 "Слишком много попыток" + if (n != null) ", подождите $n с" else ""
             }

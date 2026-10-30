@@ -3,6 +3,7 @@ package ru.pvzlist.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animate
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -53,6 +55,7 @@ class MainActivity : ComponentActivity() {
             )
         )
         super.onCreate(savedInstanceState)
+        Cfg.init(applicationContext)
         Tg.start(applicationContext)
         setContent {
             val ctx = LocalContext.current
@@ -98,12 +101,37 @@ fun App() {
             delay(1000)
         }
     }
+    // группы и темы берём прямо из аккаунта Telegram
+    LaunchedEffect(Unit) { Tg.loadGroups() }
+
     val ended = now >= END
     LaunchedEffect(ended) {
         if (ended) {
             st.open = false
-            st.done.clear()
+            st.repId = null
+            Sent.clear()
         }
+    }
+
+    // первый вход: если группы и темы ещё не выбраны — сразу открываем настройку
+    var asked by remember { mutableStateOf(false) }
+    LaunchedEffect(Tg.gstate) {
+        if (Tg.gstate == "ok" && !asked) {
+            asked = true
+            if (!(mpDone("ozon") && mpDone("wb"))) {
+                st.setupFirst = true
+                st.setupOpen = true
+            }
+        } else if (Tg.gstate == "err") {
+            st.toast("Не получилось загрузить группы", true)
+        }
+    }
+
+    BackHandler(enabled = st.pick != null) { st.pick = null }
+    BackHandler(enabled = st.pick == null && st.setupOpen) { st.setupOpen = false }
+    BackHandler(enabled = st.pick == null && !st.setupOpen && st.repId != null) { st.repId = null }
+    BackHandler(enabled = st.pick == null && !st.setupOpen && st.repId == null && st.balance) {
+        st.balance = false
     }
 
     val density = LocalDensity.current
@@ -122,7 +150,7 @@ fun App() {
     }
     LaunchedEffect(screen, st.open) { hider.offset = 0f }
 
-    Box(Modifier.fillMaxSize().background(C.Bg)) {
+    Box(Modifier.fillMaxSize().background(C.Bg).imePadding()) {
         // Контент во весь экран: уходит ПОД шапку и нижнюю панель
         BoxWithConstraints(Modifier.fillMaxSize().nestedScroll(hider)) {
             val viewH = maxHeight - headH - bottomH
@@ -134,10 +162,10 @@ fun App() {
                     .padding(top = headH + 12.dp, bottom = bottomH)
             ) {
                 when (screen) {
-                    Scr.Today -> if (!st.open) StartContent(st, ended, viewH) else TodayList(st, now)
+                    Scr.Today -> if (!st.open) StartContent(st, ended, viewH) else TodayReports(st, now)
                     Scr.Shifts -> ShiftsContent(st)
                     Scr.Balance -> BalanceContent()
-                    Scr.Profile -> ProfileContent()
+                    Scr.Profile -> ProfileContent(st)
                 }
             }
         }
@@ -170,5 +198,9 @@ fun App() {
             st.open = true
             st.at = hm(nowS())
         }
+
+        // отчёт, настройка групп и выбор выезжают поверх всего
+        Overlays(st, base, navInset)
+        ToastHost(st)
     }
 }

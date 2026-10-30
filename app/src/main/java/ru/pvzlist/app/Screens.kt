@@ -236,99 +236,6 @@ fun StartContent(st: AppState, ended: Boolean, viewH: Dp) {
     }
 }
 
-@Composable
-fun TodayList(st: AppState, now: Int) {
-    val gs = groupsNow(st.night)
-    val next = gs.flatMap { it.tasks }.firstOrNull { st.done[it.id] != true }?.id
-    val late = DEAD - now <= 1800
-    gs.forEach { g ->
-        val gd = g.tasks.count { st.done[it.id] == true }
-        Lbl(g.name, 32.dp, "$gd из ${g.tasks.size}", g.chip)
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            g.tasks.forEach { t ->
-                val d = st.done[t.id] == true
-                TaskRow(t, d, t.id == next, late, now) {
-                    if (st.done[t.id] == true) st.done.remove(t.id) else st.done[t.id] = true
-                }
-            }
-        }
-    }
-    Spacer(Modifier.height(16.dp))
-}
-
-@Composable
-fun TaskRow(t: Task, done: Boolean, next: Boolean, late: Boolean, now: Int, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(if (next) C.AccentSoft else C.Card)
-            .tap(onClick)
-            .padding(start = 12.dp, end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        val tileBg = if (done) C.OkSoft else if (next) C.Card else C.Bg
-        val tileFg = if (done) C.Ok else if (next) C.Accent else C.Mute
-        Box(
-            Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(tileBg),
-            contentAlignment = Alignment.Center
-        ) {
-            Ico(TASK_ICON.getValue(t.id), 20.dp, tileFg)
-        }
-        Column(Modifier.weight(1f)) {
-            Txt(
-                t.title, 15, 20,
-                if (done) 400 else if (next) 600 else 500,
-                if (done) C.Mute else C.Ink,
-                maxLines = 1, ellipsis = true, strike = done
-            )
-            if (!done) {
-                Txt(
-                    t.sub, 12, 16,
-                    if (t.warn) 600 else 400,
-                    if (t.warn) C.Warn else C.Mute,
-                    maxLines = 1, ellipsis = true, tnum = true
-                )
-            }
-        }
-        if (t.timer && !done) {
-            val bg = if (next) C.Card else if (late) C.WarnSoft else C.AccentSoft
-            Box(
-                Modifier
-                    .background(bg, CircleShape)
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-            ) {
-                Txt(cdFmt(DEAD - now), 13, 16, 600, if (late) C.Warn else C.Accent, tnum = true)
-            }
-        }
-        if (done) {
-            Box(
-                Modifier.size(24.dp).background(C.Ok, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Ico("check", 14.dp, Color.White, 3f)
-            }
-        } else if (next) {
-            Canvas(Modifier.size(24.dp)) {
-                drawCircle(C.Accent)
-                drawCircle(C.Card, radius = 5.25.dp.toPx())
-            }
-        } else {
-            Box(Modifier.size(24.dp).background(C.Bg, CircleShape))
-        }
-    }
-}
-
 /* ===================== Смены ===================== */
 
 @Composable
@@ -561,11 +468,12 @@ fun BalanceContent() {
 /* ===================== Профиль ===================== */
 
 @Composable
-fun ProfileContent() {
+fun ProfileContent(st: AppState) {
     val name = Tg.userName.ifBlank { "Сотрудник ПВЗ" }
     val ini = name.split(" ").filter { it.isNotBlank() }.take(2)
         .joinToString("") { it.first().uppercase() }.ifBlank { "ПВ" }
     var sure by remember { mutableStateOf(false) }
+    val gn = { mp: String -> Tg.groupById(Cfg.dest(mp).g)?.name ?: "не выбрана" }
     Row(
         Modifier
             .fillMaxWidth()
@@ -605,6 +513,18 @@ fun ProfileContent() {
                 14, 20, 500, C.Mute
             )
         }
+        Hr()
+        RowItem(Modifier.tap { st.setupFirst = false; st.setupOpen = true }, minH = 64.dp) {
+            Column(Modifier.weight(1f)) {
+                Txt("Группы и темы", 15, 22, 500)
+                Txt(
+                    "Ozon: ${gn("ozon")} · WB: ${gn("wb")}",
+                    13, 18, 400, C.Mute, maxLines = 1, ellipsis = true
+                )
+            }
+            Ico("right", 18.dp, C.Dim)
+        }
+        Hr()
         RowItem(Modifier.tap { if (sure) Tg.logout() else sure = true }) {
             Txt(
                 when {
@@ -618,6 +538,19 @@ fun ProfileContent() {
     }
     if (Tg.error.isNotEmpty()) {
         Txt(Tg.error, 13, 18, 400, C.Warn, Modifier.padding(horizontal = 32.dp, vertical = 10.dp))
+    }
+    Lbl("Адреса для отчётов")
+    CardBox {
+        AddrRow("Адрес Ozon", Cfg.addrOzon) { Cfg.setAddr("ozon", it) }
+        Hr()
+        AddrRow("Адрес WB", Cfg.addrWb) { Cfg.setAddr("wb", it) }
+        Hr()
+        RowItem {
+            Column(Modifier.weight(1f)) {
+                Txt("Открытие и закрытие Ozon", 15, 22, 500)
+                Txt("через Seckeeper", 13, 18, 400, C.Mute)
+            }
+        }
     }
     Spacer(Modifier.height(16.dp))
 }
